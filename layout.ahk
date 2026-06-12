@@ -239,9 +239,51 @@ SnapZone(fx, fy, fw, fh, *) {
     mon := GetWindowMonitor(hwnd)
     MonitorGetWorkArea(mon, &l, &t, &r, &b)
     w := r - l, h := b - t
-    ; target rectangle for the window's VISIBLE edges
-    MoveVisible(id, hwnd, Round(l + fx * w), Round(t + fy * h), Round(fw * w), Round(fh * h))
-    ClampOnScreen(id, hwnd, l, t, r, b)   ; pull back apps (e.g. Spotify) that refused to shrink
+    ; target rectangle for the window's VISIBLE edges, then move + verify + retry
+    PlaceWithRetry(id, hwnd, Round(l + fx * w), Round(t + fy * h), Round(fw * w), Round(fh * h), l, t, r, b)
+}
+
+; Move the window, check it actually landed in the right spot/size, and retry up
+; to 3 times with exponential backoff (50ms, 100ms) for apps that apply the move
+; lazily or shove themselves around afterward. Returns true once verified.
+PlaceWithRetry(id, hwnd, tx, ty, tw, th, wl, wt, wr, wb) {
+    delay := 50
+    Loop 3 {
+        MoveVisible(id, hwnd, tx, ty, tw, th)
+        ClampOnScreen(id, hwnd, wl, wt, wr, wb)   ; pull back apps that refused to shrink
+        if VerifyPlacement(hwnd, tx, ty, tw, th, wl, wt, wr, wb)
+            return true
+        if (A_Index < 3) {
+            Sleep delay
+            delay *= 2
+        }
+    }
+    return false
+}
+
+; Is the window where we wanted it? Allowed slack of a couple pixels. A window
+; that's LARGER than the target (an app enforcing its minimum size) counts as
+; correct as long as it's fully on screen and pushed as far toward the target
+; as its size allows.
+VerifyPlacement(hwnd, tx, ty, tw, th, wl, wt, wr, wb, tol := 2) {
+    v := GetVisibleRect(hwnd)
+    ; must be fully on screen
+    if (v.x < wl - tol || v.y < wt - tol || v.x + v.w > wr + tol || v.y + v.h > wb + tol)
+        return false
+    ; never smaller than asked (larger is fine — minimum-size apps)
+    if (v.w < tw - tol || v.h < th - tol)
+        return false
+    ; expected position given the window's actual size (same clamp math)
+    ex := tx, ey := ty
+    if (ex + v.w > wr)
+        ex := wr - v.w
+    if (ey + v.h > wb)
+        ey := wb - v.h
+    if (ex < wl)
+        ex := wl
+    if (ey < wt)
+        ey := wt
+    return (Abs(v.x - ex) <= tol && Abs(v.y - ey) <= tol)
 }
 
 ; Move a window so its *visible* edges land exactly on (x, y, w, h), cancelling
