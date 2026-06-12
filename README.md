@@ -43,6 +43,7 @@ Hold `CapsLock` and use the **right-hand letters as a mini numpad**:
 | Maximize / fullscreen | `CapsLock` + `K` |
 | Center the window | `CapsLock` + `Space` |
 | Send window to the next monitor | `CapsLock` + `Enter` |
+| Reload the script (after editing) | `CapsLock` + `R` |
 
 > Want a different layer key than CapsLock (e.g. right Alt)? It's one line near
 > the top of `layout.ahk` — just ask.

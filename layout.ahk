@@ -23,6 +23,9 @@ try DllCall("SetThreadDpiAwarenessContext", "ptr", -4, "ptr")
 ;    M , .   ->  bottom-left     / bottom half / bottom-right
 ;    Space   ->  centered
 ;    Enter   ->  send the window to the next monitor
+;
+;  OTHER:
+;    CapsLock + R   =  reload this script (after editing it)
 ; =========================================================
 
 SlotsDir := A_ScriptDir "\scenes"
@@ -53,6 +56,9 @@ Zone("Space", 0.2, 0.15, 0.6, 0.7) ; centered
 Hotkey("CapsLock & k",     (*) => Maximize())
 Hotkey("CapsLock & Enter", (*) => SendToNextMonitor())
 
+; ---- reload the script (R) ----
+Hotkey("CapsLock & r", (*) => Reload())
+
 ; ---- tray ----
 delMenu := Menu()
 Loop 9
@@ -60,6 +66,7 @@ Loop 9
 A_TrayMenu.Delete()
 A_TrayMenu.Add("Open scenes folder", (*) => Run(SlotsDir))
 A_TrayMenu.Add("Delete a slot", delMenu)
+A_TrayMenu.Add("Reload script", (*) => Reload())
 A_TrayMenu.Add("Exit", (*) => ExitApp())
 A_IconTip := "Scene Switcher`nHold CapsLock + # = scenes`nHold CapsLock + U/I/O J/K/L M/,/. = move window"
 
