@@ -25,7 +25,7 @@ try DllCall("SetThreadDpiAwarenessContext", "ptr", -4, "ptr")
 ;    Enter   ->  send the window to the next monitor
 ;
 ;  OTHER:
-;    CapsLock + R   =  reload this script (after editing it)
+;    CapsLock + ;   =  reload this script (after editing it)
 ; =========================================================
 
 SlotsDir := A_ScriptDir "\scenes"
@@ -56,8 +56,8 @@ Zone("Space", 0.2, 0.15, 0.6, 0.7) ; centered
 Hotkey("CapsLock & k",     (*) => Maximize())
 Hotkey("CapsLock & Enter", (*) => SendToNextMonitor())
 
-; ---- reload the script (R) ----
-Hotkey("CapsLock & r", (*) => Reload())
+; ---- reload the script ( ;/: key ) ----
+Hotkey("CapsLock & SC027", (*) => Reload())
 
 ; ---- tray ----
 delMenu := Menu()
