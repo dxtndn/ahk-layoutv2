@@ -1,11 +1,13 @@
 # Scene Switcher
 
 Save the apps you have open into a numbered slot, then bring that exact set
-back any time with a hotkey. Loading a slot opens the apps it remembers and
+back any time with a hotkey. Loading a slot opens the apps it remembers,
+**moves each window back to where it was** (including maximized windows), and
 **closes** the apps from your *other* saved slots that aren't part of it.
 
 Apps you've never saved into any slot are never touched — it only ever closes
-apps it knows about.
+apps it knows about. When you load a slot it waits a few seconds for any apps it
+just launched to open, then places their windows.
 
 Everything lives on the **CapsLock layer** — hold `CapsLock`, then press a key.
 This is built for a 60% keyboard and is safe while gaming: nothing fires unless

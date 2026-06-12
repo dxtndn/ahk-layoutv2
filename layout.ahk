@@ -71,10 +71,14 @@ SaveSlot(n, *) {
         if !IsAppWindow(hwnd)
             continue
         try {
-            proc := WinGetProcessName("ahk_id " hwnd)
-            path := WinGetProcessPath("ahk_id " hwnd)
-            WinGetPos(&x, &y, &w, &h, "ahk_id " hwnd)
-            lines.Push(proc "`t" path "`t" x "`t" y "`t" w "`t" h)
+            id    := "ahk_id " hwnd
+            proc  := WinGetProcessName(id)
+            path  := WinGetProcessPath(id)
+            mm    := WinGetMinMax(id)
+            state := (mm = 1) ? "max" : (mm = -1) ? "min" : "normal"
+            title := StrReplace(StrReplace(WinGetTitle(id), "`t", " "), "`n", " ")
+            WinGetPos(&x, &y, &w, &h, id)
+            lines.Push(proc "`t" path "`t" x "`t" y "`t" w "`t" h "`t" state "`t" title)
         }
     }
     if !lines.Length {
@@ -84,7 +88,7 @@ SaveSlot(n, *) {
     file := SlotsDir "\" n ".txt"
     if FileExist(file)
         FileDelete(file)
-    FileAppend("; Scene slot " n "  (per line: proc, path, x, y, w, h)`n", file)
+    FileAppend("; Scene slot " n "  (per line: proc, path, x, y, w, h, state, title)`n", file)
     for line in lines
         FileAppend(line "`n", file)
     Flash("Saved slot " n "  (" CountProcs(lines) " apps)")
@@ -98,21 +102,94 @@ LoadSlot(n, *) {
         return
     }
 
-    want    := ProcsInFile(file)      ; processes this slot should have open
+    records := ReadRecords(file)      ; one entry per saved window
+    want    := Map()                  ; processes this slot should have open
+    for r in records
+        want[r.proc] := true
     managed := AllManagedProcs()      ; processes across every saved slot
-    launch  := LaunchMapFromFile(file)
 
     ; close managed apps that aren't part of this slot
     for proc in managed
         if !want.Has(proc)
             CloseProc(proc, ForceCloseMs)
 
-    ; open this slot's apps that aren't already running
-    for proc, path in launch
-        if !ProcessExist(proc)
-            try Run(path)
+    ; open this slot's apps that aren't already running (launch each app once)
+    launched := Map()
+    for r in records {
+        if (launched.Has(r.proc) || r.path = "")
+            continue
+        launched[r.proc] := true
+        if !ProcessExist(r.proc)
+            try Run(r.path)
+    }
 
+    Flash("Loading slot " n " ...")
+    RestorePositions(records)         ; move each window back to where it was
     Flash("Loaded slot " n)
+}
+
+; Move every saved window back to its position. Waits (up to a few seconds)
+; for freshly-launched apps to open their windows, then places them.
+RestorePositions(records) {
+    deadline := A_TickCount + 6000
+    match := Map()      ; record index -> hwnd it was matched to (kept stable)
+    used  := Map()      ; hwnd -> true (already claimed by some record)
+    loop {
+        allMatched := true
+        idx := 0
+        for r in records {
+            idx++
+            if !match.Has(idx) {
+                hwnd := FindWindowFor(r, used)
+                if hwnd {
+                    match[idx] := hwnd
+                    used[hwnd] := true
+                } else {
+                    allMatched := false
+                }
+            }
+            if match.Has(idx)
+                ApplyPlacement(match[idx], r)   ; re-apply so late self-moves get corrected
+        }
+        if (allMatched || A_TickCount > deadline)
+            break
+        Sleep 250
+    }
+}
+
+; Find an unclaimed live window for this record: same process, preferring an
+; exact title match, otherwise the first available window of that process.
+FindWindowFor(r, used) {
+    fallback := 0
+    for hwnd in WinGetList() {
+        if (used.Has(hwnd) || !IsAppWindow(hwnd))
+            continue
+        try {
+            if (StrLower(WinGetProcessName("ahk_id " hwnd)) != r.proc)
+                continue
+            if (r.title != "" && WinGetTitle("ahk_id " hwnd) = r.title)
+                return hwnd
+        } catch
+            continue
+        if !fallback
+            fallback := hwnd
+    }
+    return fallback
+}
+
+ApplyPlacement(hwnd, r) {
+    id := "ahk_id " hwnd
+    try {
+        if (r.state = "max") {
+            WinMaximize(id)
+        } else if (r.state = "min") {
+            WinMinimize(id)
+        } else {
+            if WinGetMinMax(id)
+                WinRestore(id)
+            WinMove(r.x, r.y, r.w, r.h, id)
+        }
+    }
 }
 
 DeleteSlot(n, *) {
@@ -227,22 +304,24 @@ IsAppWindow(hwnd) {
     return true
 }
 
-ProcsInFile(file) {
-    set := Map()
-    for line in DataLines(file)
-        set[StrLower(StrSplit(line, "`t")[1])] := true
-    return set
-}
-
-LaunchMapFromFile(file) {
-    m := Map()                          ; proc(lower) -> exe path (first one seen)
+; Parse a slot file into window records. Format per line (tab-separated):
+;   proc  path  x  y  w  h  [state]  [title]
+; (state/title are optional so older save files still load.)
+ReadRecords(file) {
+    out := []
     for line in DataLines(file) {
         f := StrSplit(line, "`t")
-        proc := StrLower(f[1])
-        if (!m.Has(proc) && f.Length >= 2 && f[2] != "")
-            m[proc] := f[2]
+        if (f.Length < 6)
+            continue
+        out.Push({
+            proc:  StrLower(Trim(f[1])),
+            path:  Trim(f[2]),
+            x: Integer(f[3]), y: Integer(f[4]), w: Integer(f[5]), h: Integer(f[6]),
+            state: (f.Length >= 7) ? Trim(f[7]) : "normal",
+            title: (f.Length >= 8) ? Trim(f[8]) : ""
+        })
     }
-    return m
+    return out
 }
 
 AllManagedProcs() {
