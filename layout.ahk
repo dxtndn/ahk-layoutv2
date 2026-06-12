@@ -248,6 +248,7 @@ SnapZone(fx, fy, fw, fh, *) {
     w := r - l, h := b - t
     ; target rectangle for the window's VISIBLE edges, then move + verify + retry
     PlaceWithRetry(id, hwnd, Round(l + fx * w), Round(t + fy * h), Round(fw * w), Round(fh * h), l, t, r, b)
+    EnsureUsable(id, hwnd, l, t, r, b)   ; bail oversized windows out to the main monitor
 }
 
 ; Move the window, check it actually landed in the right spot/size, and retry up
@@ -299,6 +300,18 @@ VerifyPlacement(hwnd, tx, ty, tw, th, wl, wt, wr, wb, tol := 2) {
 MoveVisible(id, hwnd, x, y, w, h) {
     bd := GetInvisibleBorder(hwnd)
     WinMove(x - bd.l, y - bd.t, w + bd.l + bd.r, h + bd.t + bd.b, id)
+}
+
+; If the window is too big to actually fit on the monitor it was placed on — so
+; its controls hang off the edge, or it spills across into the next monitor —
+; relocate it to the very top-left of the main monitor where it's usable.
+EnsureUsable(id, hwnd, wl, wt, wr, wb) {
+    v := GetVisibleRect(hwnd)
+    if (v.w <= (wr - wl) + 4 && v.h <= (wb - wt) + 4)
+        return                                   ; it fits here, nothing to do
+    MonitorGetWorkArea(MonitorGetPrimary(), &pl, &pt, &pr, &pb)
+    MoveVisible(id, hwnd, pl, pt, v.w, v.h)
+    Flash("Too big for that display - moved to main monitor")
 }
 
 ; If the window ended up hanging off the work area (because it has a minimum
@@ -383,12 +396,13 @@ CenterWindow(*) {
         v2 := GetVisibleRect(hwnd)
         want := CenteredPos(l, t, w, h, v2.w, v2.h)
         if (Abs(v2.x - want.x) <= 2 && Abs(v2.y - want.y) <= 2)
-            return
+            break
         if (A_Index < 3) {
             Sleep delay
             delay *= 2
         }
     }
+    EnsureUsable(id, hwnd, l, t, r, b)   ; bail oversized windows out to the main monitor
 }
 
 ; Top-left position that centers a (winW x winH) window in the work area. If the
@@ -429,10 +443,12 @@ SendToNextMonitor(*) {
     MonitorGetWorkArea(next, &nl, &nt, &nr, &nb)
     nw := nr - nl, nh := nb - nt
     WinMove(Round(nl + fx * nw), Round(nt + fy * nh), Round(fw * nw), Round(fh * nh), id)
-    if wasMax
+    if wasMax {
         WinMaximize(id)
-    else
+    } else {
         ClampOnScreen(id, hwnd, nl, nt, nr, nb)   ; keep oversized apps fully on screen
+        EnsureUsable(id, hwnd, nl, nt, nr, nb)    ; or bail out to main monitor if it can't fit
+    }
 }
 
 GetWindowMonitor(hwnd) {
