@@ -31,6 +31,17 @@ try DllCall("SetThreadDpiAwarenessContext", "ptr", -4, "ptr")
 SlotsDir := A_ScriptDir "\scenes"
 ForceCloseMs := 4000          ; if an app won't close politely within this many ms, force it (0 = never force)
 
+; Apps whose visible window belongs to a DIFFERENT process than the one you
+; actually start/stop (so launching the window's own .exe won't open it, and
+; closing the window only hides it to the system tray). Keyed by the process
+; name the window reports.
+;   Steam: the window is steamwebhelper.exe, but Steam is started/stopped via
+;   steam.exe. The steam:// links below open it, and fully QUIT it (instead of
+;   dropping it to the tray) without needing to know where Steam is installed.
+SpecialApps := Map(
+    "steamwebhelper.exe", { launch: "steam://open/main", quit: "steam://exit" }
+)
+
 if !DirExist(SlotsDir)
     DirCreate(SlotsDir)
 
@@ -120,19 +131,23 @@ LoadSlot(n, *) {
         want[r.proc] := true
     managed := AllManagedProcs()      ; processes across every saved slot
 
-    ; close managed apps that aren't part of this slot
+    ; close managed apps that aren't part of this slot — all at once, so we wait
+    ; out the close grace period ONCE for the whole batch, not per app
+    toClose := []
     for proc in managed
         if !want.Has(proc)
-            CloseProc(proc, ForceCloseMs)
+            toClose.Push(proc)
+    CloseProcs(toClose, ForceCloseMs)
 
     ; open this slot's apps that aren't already running (launch each app once)
     launched := Map()
     for r in records {
-        if (launched.Has(r.proc) || r.path = "")
+        if launched.Has(r.proc)
             continue
         launched[r.proc] := true
-        if !ProcessExist(r.proc)
-            try Run(r.path)
+        if ProcessExist(r.proc)
+            continue
+        LaunchApp(r)
     }
 
     Flash("Loading slot " n " ...")
@@ -143,11 +158,12 @@ LoadSlot(n, *) {
 ; Move every saved window back to its position. Waits (up to a few seconds)
 ; for freshly-launched apps to open their windows, then places them.
 RestorePositions(records) {
-    deadline := A_TickCount + 6000
-    match := Map()      ; record index -> hwnd it was matched to (kept stable)
-    used  := Map()      ; hwnd -> true (already claimed by some record)
+    deadline     := A_TickCount + 6000
+    match        := Map()    ; record index -> hwnd it was matched to (kept stable)
+    used         := Map()    ; hwnd -> true (already claimed by some record)
+    lastProgress := A_TickCount
     loop {
-        allMatched := true
+        before := match.Count
         idx := 0
         for r in records {
             idx++
@@ -156,16 +172,20 @@ RestorePositions(records) {
                 if hwnd {
                     match[idx] := hwnd
                     used[hwnd] := true
-                } else {
-                    allMatched := false
                 }
             }
             if match.Has(idx)
                 ApplyPlacement(match[idx], r)   ; re-apply so late self-moves get corrected
         }
-        if (allMatched || A_TickCount > deadline)
+        if (match.Count = records.Length)       ; everything placed -> done immediately
             break
-        Sleep 250
+        if (match.Count > before)               ; a new window just showed up
+            lastProgress := A_TickCount
+        ; stop early once no new window has appeared for a bit (an app that won't
+        ; launch shouldn't make every load sit here for the full 6 seconds)
+        if (A_TickCount - lastProgress > 1500 || A_TickCount > deadline)
+            break
+        Sleep 200
     }
 }
 
@@ -530,19 +550,59 @@ CountProcs(lines) {
     return set.Count
 }
 
-CloseProc(proc, forceMs) {
-    if !ProcessExist(proc)
+; Launch one saved app. Special apps (e.g. Steam) use their dedicated start
+; command; everything else just runs its saved path.
+LaunchApp(r) {
+    global SpecialApps
+    if SpecialApps.Has(r.proc) {
+        try Run(SpecialApps[r.proc].launch)
         return
-    ; ask each window of this process to close politely
+    }
+    if (r.path != "")
+        try Run(r.path)
+}
+
+; Close a whole batch of processes at once. Every app is asked to quit up front,
+; THEN we wait a single shared grace period for the group to exit — so closing
+; five apps costs one wait, not five. Anything still alive after that is forced.
+; Special apps (e.g. Steam) are quit via their dedicated command and never
+; force-killed (so Steam shuts down cleanly instead of just hiding in the tray).
+CloseProcs(procs, forceMs) {
+    global SpecialApps
+    closeSet := Map()
+    for proc in procs {
+        if SpecialApps.Has(proc)
+            try Run(SpecialApps[proc].quit)        ; e.g. steam://exit
+        else if ProcessExist(proc)
+            closeSet[proc] := true
+    }
+    ; politely close every window of those apps in one sweep
     for hwnd in WinGetList() {
         try {
-            if (StrLower(WinGetProcessName("ahk_id " hwnd)) = proc)
+            if closeSet.Has(StrLower(WinGetProcessName("ahk_id " hwnd)))
                 WinClose("ahk_id " hwnd)
         }
     }
-    ; if it's still alive after the grace period, force it
-    if (forceMs > 0 && ProcessWaitClose(proc, forceMs / 1000))
-        try ProcessClose(proc)
+    if (forceMs <= 0)
+        return
+    ; one shared wait for the whole batch to exit
+    deadline := A_TickCount + forceMs
+    loop {
+        alive := false
+        for proc in closeSet {
+            if ProcessExist(proc) {
+                alive := true
+                break
+            }
+        }
+        if (!alive || A_TickCount > deadline)
+            break
+        Sleep 100
+    }
+    ; force anything that's still standing
+    for proc in closeSet
+        if ProcessExist(proc)
+            try ProcessClose(proc)
 }
 
 Flash(text) {
