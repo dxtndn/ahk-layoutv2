@@ -241,6 +241,7 @@ SnapZone(fx, fy, fw, fh, *) {
     w := r - l, h := b - t
     ; target rectangle for the window's VISIBLE edges
     MoveVisible(id, hwnd, Round(l + fx * w), Round(t + fy * h), Round(fw * w), Round(fh * h))
+    ClampOnScreen(id, hwnd, l, t, r, b)   ; pull back apps (e.g. Spotify) that refused to shrink
 }
 
 ; Move a window so its *visible* edges land exactly on (x, y, w, h), cancelling
@@ -249,6 +250,37 @@ SnapZone(fx, fy, fw, fh, *) {
 MoveVisible(id, hwnd, x, y, w, h) {
     bd := GetInvisibleBorder(hwnd)
     WinMove(x - bd.l, y - bd.t, w + bd.l + bd.r, h + bd.t + bd.b, id)
+}
+
+; If the window ended up hanging off the work area (because it has a minimum
+; size larger than the zone), slide it back so it's fully on screen. If it's
+; simply bigger than the monitor, align it to the top-left so its controls stay
+; reachable.
+ClampOnScreen(id, hwnd, wl, wt, wr, wb) {
+    v := GetVisibleRect(hwnd)
+    nx := v.x, ny := v.y
+    if (nx + v.w > wr)
+        nx := wr - v.w
+    if (ny + v.h > wb)
+        ny := wb - v.h
+    if (nx < wl)
+        nx := wl
+    if (ny < wt)
+        ny := wt
+    if (nx != v.x || ny != v.y)
+        MoveVisible(id, hwnd, nx, ny, v.w, v.h)
+}
+
+; The window's actual *visible* rectangle (what DWM reports), as {x, y, w, h}.
+GetVisibleRect(hwnd) {
+    frame := Buffer(16, 0)
+    if (DllCall("dwmapi\DwmGetWindowAttribute", "ptr", hwnd, "uint", 9, "ptr", frame, "uint", 16) != 0) {
+        WinGetPos(&x, &y, &w, &h, "ahk_id " hwnd)
+        return { x: x, y: y, w: w, h: h }
+    }
+    fl := NumGet(frame, 0, "int"), ft := NumGet(frame, 4, "int")
+    fr := NumGet(frame, 8, "int"), fb := NumGet(frame, 12, "int")
+    return { x: fl, y: ft, w: fr - fl, h: fb - ft }
 }
 
 ; Thickness of the invisible drop-shadow border on each side of a window:
@@ -301,6 +333,8 @@ SendToNextMonitor(*) {
     WinMove(Round(nl + fx * nw), Round(nt + fy * nh), Round(fw * nw), Round(fh * nh), id)
     if wasMax
         WinMaximize(id)
+    else
+        ClampOnScreen(id, hwnd, nl, nt, nr, nb)   ; keep oversized apps fully on screen
 }
 
 GetWindowMonitor(hwnd) {
