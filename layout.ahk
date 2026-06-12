@@ -2,6 +2,11 @@
 #SingleInstance Force
 Persistent
 
+; Work in real (physical) pixels on every monitor, so window placement is
+; pixel-accurate even on displays with different DPI scaling (e.g. a 150% main
+; monitor next to a 100% one). -4 = DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2.
+try DllCall("SetThreadDpiAwarenessContext", "ptr", -4, "ptr")
+
 ; =========================================================
 ;  Scene Switcher   —   everything lives on the CapsLock "layer"
 ;  (hold CapsLock, then press the key). Designed for a 60% board
