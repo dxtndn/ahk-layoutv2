@@ -3,19 +3,21 @@
 Persistent
 
 ; =========================================================
-;  Scene Switcher
+;  Scene Switcher   —   everything lives on the CapsLock "layer"
+;  (hold CapsLock, then press the key). Designed for a 60% board
+;  and safe while gaming: nothing fires unless CapsLock is held.
 ; =========================================================
 ;  SCENES (save/recall sets of apps) — slots 1-9:
-;    Ctrl + Alt + Shift + <n>   =  SAVE the apps open right now into slot n
-;    Ctrl + Alt + <n>           =  LOAD slot n (open its apps, close the others)
-;    Ctrl + Alt + Win + <n>     =  DELETE slot n (asks to confirm)
+;    CapsLock + <n>            =  LOAD slot n (open its apps, close the others)
+;    CapsLock + Shift + <n>    =  SAVE the apps open right now into slot n
+;    CapsLock + Alt + <n>      =  DELETE slot n (asks to confirm)
 ;
-;  MOVE THE ACTIVE WINDOW — Ctrl+Alt+Numpad (mirrors the screen):
-;    7 8 9   ->  top-left quarter / top half / top-right quarter
-;    4 5 6   ->  left half       / MAXIMIZE  / right half
-;    1 2 3   ->  bottom-left     / bottom half / bottom-right
-;    0       ->  centered
-;    Ctrl + Alt + Enter         =  send the window to the next monitor
+;  MOVE THE ACTIVE WINDOW — CapsLock + right-hand letters (a mini numpad):
+;    U I O   ->  top-left quarter / top half / top-right quarter
+;    J K L   ->  left half       / MAXIMIZE  / right half
+;    M , .   ->  bottom-left     / bottom half / bottom-right
+;    Space   ->  centered
+;    Enter   ->  send the window to the next monitor
 ; =========================================================
 
 SlotsDir := A_ScriptDir "\scenes"
@@ -24,30 +26,27 @@ ForceCloseMs := 4000          ; if an app won't close politely within this many 
 if !DirExist(SlotsDir)
     DirCreate(SlotsDir)
 
-; ---- scene slots 1-9 ----
-Loop 9 {
-    n := A_Index
-    Hotkey("^!+" n, SaveSlot.Bind(n))     ; Ctrl+Alt+Shift+n  -> save
-    Hotkey("^!" n,  LoadSlot.Bind(n))     ; Ctrl+Alt+n        -> load
-    Hotkey("^!#" n, DeleteSlot.Bind(n))   ; Ctrl+Alt+Win+n    -> delete
-}
+SetCapsLockState "AlwaysOff"  ; CapsLock becomes a pure modifier — it never toggles caps
 
-; ---- window zones (Ctrl+Alt+Numpad, works whether NumLock is on or off) ----
-;            numlock-on  numlock-off     x     y     w     h   (fractions of the monitor)
-BindZone("Numpad7", "NumpadHome",  0,    0,    0.5,  0.5)   ; top-left quarter
-BindZone("Numpad8", "NumpadUp",    0,    0,    1,    0.5)   ; top half
-BindZone("Numpad9", "NumpadPgUp",  0.5,  0,    0.5,  0.5)   ; top-right quarter
-BindZone("Numpad4", "NumpadLeft",  0,    0,    0.5,  1)     ; left half
-BindZone("Numpad6", "NumpadRight", 0.5,  0,    0.5,  1)     ; right half
-BindZone("Numpad1", "NumpadEnd",   0,    0.5,  0.5,  0.5)   ; bottom-left quarter
-BindZone("Numpad2", "NumpadDown",  0,    0.5,  1,    0.5)   ; bottom half
-BindZone("Numpad3", "NumpadPgDn",  0.5,  0.5,  0.5,  0.5)   ; bottom-right quarter
-BindZone("Numpad0", "NumpadIns",   0.2,  0.15, 0.6,  0.7)   ; centered
+; ---- scene slots 1-9 (CapsLock + number; Shift = save, Alt = delete) ----
+Loop 9
+    Hotkey("CapsLock & " A_Index, SceneKey.Bind(A_Index))
 
-; ---- maximize / fullscreen (Numpad 5) and next monitor (Enter) ----
-Hotkey("^!Numpad5",  (*) => Maximize())
-Hotkey("^!NumpadClear", (*) => Maximize())
-Hotkey("^!Enter",    (*) => SendToNextMonitor())
+; ---- window zones (CapsLock + letter, laid out like a numpad) ----
+;     key            x     y     w     h   (fractions of the monitor)
+Zone("u",  0,    0,    0.5,  0.5)   ; top-left quarter
+Zone("i",  0,    0,    1,    0.5)   ; top half
+Zone("o",  0.5,  0,    0.5,  0.5)   ; top-right quarter
+Zone("j",  0,    0,    0.5,  1)     ; left half
+Zone("l",  0.5,  0,    0.5,  1)     ; right half
+Zone("m",  0,    0.5,  0.5,  0.5)   ; bottom-left quarter
+Zone(",",  0,    0.5,  1,    0.5)   ; bottom half
+Zone(".",  0.5,  0.5,  0.5,  0.5)   ; bottom-right quarter
+Zone("Space", 0.2, 0.15, 0.6, 0.7) ; centered
+
+; ---- maximize / fullscreen (K) and next monitor (Enter) ----
+Hotkey("CapsLock & k",     (*) => Maximize())
+Hotkey("CapsLock & Enter", (*) => SendToNextMonitor())
 
 ; ---- tray ----
 delMenu := Menu()
@@ -57,7 +56,7 @@ A_TrayMenu.Delete()
 A_TrayMenu.Add("Open scenes folder", (*) => Run(SlotsDir))
 A_TrayMenu.Add("Delete a slot", delMenu)
 A_TrayMenu.Add("Exit", (*) => ExitApp())
-A_IconTip := "Scene Switcher`nCtrl+Alt+Shift+# save  /  Ctrl+Alt+# load`nCtrl+Alt+Numpad = move window"
+A_IconTip := "Scene Switcher`nHold CapsLock + # = scenes`nHold CapsLock + U/I/O J/K/L M/,/. = move window"
 
 return
 
@@ -133,11 +132,19 @@ DeleteSlot(n, *) {
 ;  WINDOW MOVING
 ; =========================================================
 
-; bind one zone to both NumLock-on and NumLock-off key names
-BindZone(numKey, navKey, fx, fy, fw, fh) {
-    fn := SnapZone.Bind(fx, fy, fw, fh)
-    Hotkey("^!" numKey, fn)
-    Hotkey("^!" navKey, fn)
+; bind one CapsLock-layer zone hotkey
+Zone(key, fx, fy, fw, fh) {
+    Hotkey("CapsLock & " key, SnapZone.Bind(fx, fy, fw, fh))
+}
+
+; CapsLock + number: plain = load, +Shift = save, +Alt = delete
+SceneKey(n, *) {
+    if GetKeyState("Shift", "P")
+        SaveSlot(n)
+    else if GetKeyState("Alt", "P")
+        DeleteSlot(n)
+    else
+        LoadSlot(n)
 }
 
 SnapZone(fx, fy, fw, fh, *) {

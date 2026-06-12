@@ -7,38 +7,43 @@ back any time with a hotkey. Loading a slot opens the apps it remembers and
 Apps you've never saved into any slot are never touched — it only ever closes
 apps it knows about.
 
+Everything lives on the **CapsLock layer** — hold `CapsLock`, then press a key.
+This is built for a 60% keyboard and is safe while gaming: nothing fires unless
+CapsLock is held, and CapsLock no longer toggles caps (it's a pure modifier).
+
 ## Scene hotkeys (slots 1–9)
 
 | Do this | Hotkey |
 |---|---|
-| **Save** the apps open right now into slot *n* | `Ctrl` + `Alt` + `Shift` + *n* |
-| **Load** slot *n* (open its apps, close the others) | `Ctrl` + `Alt` + *n* |
-| **Delete** slot *n* (asks to confirm) | `Ctrl` + `Alt` + `Win` + *n* |
+| **Load** slot *n* (open its apps, close the others) | `CapsLock` + *n* |
+| **Save** the apps open right now into slot *n* | `CapsLock` + `Shift` + *n* |
+| **Delete** slot *n* (asks to confirm) | `CapsLock` + `Alt` + *n* |
 
-Example: open Steam, Discord and Spotify, press `Ctrl+Alt+Shift+2` to save them
-as slot 2. Later, press `Ctrl+Alt+2` and it'll reopen those three and close the
+Example: open Steam, Discord and Spotify, press `CapsLock+Shift+2` to save them
+as slot 2. Later, press `CapsLock+2` and it'll reopen those three and close the
 apps that belong to your other slots. You can also delete a slot from the tray
 icon → **Delete a slot**.
 
 ## Move the active window
 
-Uses the **numpad**, laid out exactly like your screen — `Ctrl + Alt + Numpad`:
+Hold `CapsLock` and use the **right-hand letters as a mini numpad**:
 
 ```
- 7  8  9      top-left   |  top half   | top-right
- 4  5  6      left half  | MAXIMIZE    | right half
- 1  2  3      bot-left   | bottom half | bot-right
-    0         centered
+ U  I  O      top-left   |  top half   | top-right
+ J  K  L      left half  | MAXIMIZE    | right half
+ M  ,  .      bot-left   | bottom half | bot-right
+   Space      centered
 ```
 
 | Do this | Hotkey |
 |---|---|
-| Snap window to a zone | `Ctrl` + `Alt` + `Numpad 1–9` |
-| Maximize / fullscreen | `Ctrl` + `Alt` + `Numpad 5` |
-| Center the window | `Ctrl` + `Alt` + `Numpad 0` |
-| Send window to the next monitor | `Ctrl` + `Alt` + `Enter` |
+| Snap window to a zone | `CapsLock` + `U I O / J L / M , .` |
+| Maximize / fullscreen | `CapsLock` + `K` |
+| Center the window | `CapsLock` + `Space` |
+| Send window to the next monitor | `CapsLock` + `Enter` |
 
-(The zone keys work whether NumLock is on or off.)
+> Want a different layer key than CapsLock (e.g. right Alt)? It's one line near
+> the top of `layout.ahk` — just ask.
 
 ## How to run it
 
