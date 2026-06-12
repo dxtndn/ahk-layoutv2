@@ -114,7 +114,7 @@ SaveSlot(n, *) {
     FileAppend("; Scene slot " n "  (per line: proc, path, x, y, w, h, state, title)`n", file)
     for line in lines
         FileAppend(line "`n", file)
-    Flash("Saved slot " n "  (" CountProcs(lines) " apps)")
+    Flash("Saved slot " n ": " ProcNames(lines))
 }
 
 LoadSlot(n, *) {
@@ -139,15 +139,17 @@ LoadSlot(n, *) {
             toClose.Push(proc)
     CloseProcs(toClose, ForceCloseMs)
 
-    ; open this slot's apps that aren't already running (launch each app once)
+    ; open this slot's apps (each one once). Launch if the app isn't running OR
+    ; it's running but has no visible window right now — i.e. it's sitting in the
+    ; system tray (Discord, Spotify, Steam, ...). Relaunching a single-instance
+    ; app just brings its existing window back to the front, it won't start a 2nd.
     launched := Map()
     for r in records {
         if launched.Has(r.proc)
             continue
         launched[r.proc] := true
-        if ProcessExist(r.proc)
-            continue
-        LaunchApp(r)
+        if (!ProcessExist(r.proc) || !HasVisibleWindow(r.proc))
+            LaunchApp(r)
     }
 
     Flash("Loading slot " n " ...")
@@ -486,6 +488,21 @@ GetWindowMonitor(hwnd) {
 ;  HELPERS
 ; =========================================================
 
+; Does this process currently have at least one normal, visible app window?
+; Lets us tell "running with a window on screen" apart from "alive only in the
+; system tray" (where the window needs to be re-summoned).
+HasVisibleWindow(proc) {
+    for hwnd in WinGetList() {
+        if !IsAppWindow(hwnd)
+            continue
+        try {
+            if (StrLower(WinGetProcessName("ahk_id " hwnd)) = proc)
+                return true
+        }
+    }
+    return false
+}
+
 ; True only for real, switchable application windows.
 IsAppWindow(hwnd) {
     id := "ahk_id " hwnd
@@ -543,11 +560,18 @@ DataLines(file) {
     return out
 }
 
-CountProcs(lines) {
-    set := Map()
-    for line in lines
-        set[StrLower(StrSplit(line, "`t")[1])] := true
-    return set.Count
+; The distinct app (process) names in these saved lines, comma-separated — shown
+; when you save a slot so you can confirm at a glance exactly what it captured.
+ProcNames(lines) {
+    seen := Map(), out := ""
+    for line in lines {
+        p := StrLower(StrSplit(line, "`t")[1])
+        if !seen.Has(p) {
+            seen[p] := true
+            out .= (out = "" ? "" : ", ") p
+        }
+    }
+    return out
 }
 
 ; Launch one saved app. Special apps (e.g. Steam) use their dedicated start
