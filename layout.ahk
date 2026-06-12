@@ -4,16 +4,18 @@ Persistent
 
 ; =========================================================
 ;  Scene Switcher
+; =========================================================
+;  SCENES (save/recall sets of apps) — slots 1-9:
+;    Ctrl + Alt + Shift + <n>   =  SAVE the apps open right now into slot n
+;    Ctrl + Alt + <n>           =  LOAD slot n (open its apps, close the others)
+;    Ctrl + Alt + Win + <n>     =  DELETE slot n (asks to confirm)
 ;
-;  Save the apps you currently have open into a numbered slot,
-;  then recall that slot later with a hotkey. Loading a slot
-;  opens the apps it had open and closes the apps from your
-;  OTHER saved slots that aren't part of it. Apps you've never
-;  saved into any slot are never touched.
-;
-;  HOTKEYS  (slots 1-9):
-;    Ctrl + Alt + Shift + <n>   =  SAVE  the apps open right now into slot n
-;    Ctrl + Alt + <n>           =  LOAD  slot n (open its apps, close the others)
+;  MOVE THE ACTIVE WINDOW — Ctrl+Alt+Numpad (mirrors the screen):
+;    7 8 9   ->  top-left quarter / top half / top-right quarter
+;    4 5 6   ->  left half       / MAXIMIZE  / right half
+;    1 2 3   ->  bottom-left     / bottom half / bottom-right
+;    0       ->  centered
+;    Ctrl + Alt + Enter         =  send the window to the next monitor
 ; =========================================================
 
 SlotsDir := A_ScriptDir "\scenes"
@@ -22,23 +24,45 @@ ForceCloseMs := 4000          ; if an app won't close politely within this many 
 if !DirExist(SlotsDir)
     DirCreate(SlotsDir)
 
-; ---- bind slots 1-9 ----
+; ---- scene slots 1-9 ----
 Loop 9 {
     n := A_Index
-    Hotkey("^!+" n, SaveSlot.Bind(n))   ; Ctrl+Alt+Shift+n  -> save
-    Hotkey("^!" n,  LoadSlot.Bind(n))   ; Ctrl+Alt+n        -> load
+    Hotkey("^!+" n, SaveSlot.Bind(n))     ; Ctrl+Alt+Shift+n  -> save
+    Hotkey("^!" n,  LoadSlot.Bind(n))     ; Ctrl+Alt+n        -> load
+    Hotkey("^!#" n, DeleteSlot.Bind(n))   ; Ctrl+Alt+Win+n    -> delete
 }
 
+; ---- window zones (Ctrl+Alt+Numpad, works whether NumLock is on or off) ----
+;            numlock-on  numlock-off     x     y     w     h   (fractions of the monitor)
+BindZone("Numpad7", "NumpadHome",  0,    0,    0.5,  0.5)   ; top-left quarter
+BindZone("Numpad8", "NumpadUp",    0,    0,    1,    0.5)   ; top half
+BindZone("Numpad9", "NumpadPgUp",  0.5,  0,    0.5,  0.5)   ; top-right quarter
+BindZone("Numpad4", "NumpadLeft",  0,    0,    0.5,  1)     ; left half
+BindZone("Numpad6", "NumpadRight", 0.5,  0,    0.5,  1)     ; right half
+BindZone("Numpad1", "NumpadEnd",   0,    0.5,  0.5,  0.5)   ; bottom-left quarter
+BindZone("Numpad2", "NumpadDown",  0,    0.5,  1,    0.5)   ; bottom half
+BindZone("Numpad3", "NumpadPgDn",  0.5,  0.5,  0.5,  0.5)   ; bottom-right quarter
+BindZone("Numpad0", "NumpadIns",   0.2,  0.15, 0.6,  0.7)   ; centered
+
+; ---- maximize / fullscreen (Numpad 5) and next monitor (Enter) ----
+Hotkey("^!Numpad5",  (*) => Maximize())
+Hotkey("^!NumpadClear", (*) => Maximize())
+Hotkey("^!Enter",    (*) => SendToNextMonitor())
+
 ; ---- tray ----
+delMenu := Menu()
+Loop 9
+    delMenu.Add("Slot " A_Index, DeleteSlot.Bind(A_Index))
 A_TrayMenu.Delete()
 A_TrayMenu.Add("Open scenes folder", (*) => Run(SlotsDir))
+A_TrayMenu.Add("Delete a slot", delMenu)
 A_TrayMenu.Add("Exit", (*) => ExitApp())
-A_IconTip := "Scene Switcher`nCtrl+Alt+Shift+# = save`nCtrl+Alt+# = load"
+A_IconTip := "Scene Switcher`nCtrl+Alt+Shift+# save  /  Ctrl+Alt+# load`nCtrl+Alt+Numpad = move window"
 
 return
 
 ; =========================================================
-;  SAVE / LOAD
+;  SCENES: save / load / delete
 ; =========================================================
 
 SaveSlot(n, *) {
@@ -90,6 +114,89 @@ LoadSlot(n, *) {
             try Run(path)
 
     Flash("Loaded slot " n)
+}
+
+DeleteSlot(n, *) {
+    global SlotsDir
+    file := SlotsDir "\" n ".txt"
+    if !FileExist(file) {
+        Flash("Slot " n " is already empty")
+        return
+    }
+    if (MsgBox("Delete saved slot " n "?", "Scene Switcher", "YesNo Icon!") = "Yes") {
+        FileDelete(file)
+        Flash("Deleted slot " n)
+    }
+}
+
+; =========================================================
+;  WINDOW MOVING
+; =========================================================
+
+; bind one zone to both NumLock-on and NumLock-off key names
+BindZone(numKey, navKey, fx, fy, fw, fh) {
+    fn := SnapZone.Bind(fx, fy, fw, fh)
+    Hotkey("^!" numKey, fn)
+    Hotkey("^!" navKey, fn)
+}
+
+SnapZone(fx, fy, fw, fh, *) {
+    hwnd := WinExist("A")
+    if !hwnd
+        return
+    id := "ahk_id " hwnd
+    if WinGetMinMax(id)               ; if maximized/minimized, restore before moving
+        WinRestore(id)
+    mon := GetWindowMonitor(hwnd)
+    MonitorGetWorkArea(mon, &l, &t, &r, &b)
+    w := r - l, h := b - t
+    WinMove(Round(l + fx * w), Round(t + fy * h), Round(fw * w), Round(fh * h), id)
+}
+
+Maximize(*) {
+    hwnd := WinExist("A")
+    if hwnd
+        WinMaximize("ahk_id " hwnd)
+}
+
+SendToNextMonitor(*) {
+    hwnd := WinExist("A")
+    if !hwnd
+        return
+    count := MonitorGetCount()
+    if (count < 2)
+        return
+    id := "ahk_id " hwnd
+    wasMax := WinGetMinMax(id) = 1
+    if wasMax
+        WinRestore(id)
+
+    cur := GetWindowMonitor(hwnd)
+    next := Mod(cur, count) + 1        ; cycle to the next monitor
+
+    ; current position as fractions of the current monitor's work area
+    MonitorGetWorkArea(cur, &cl, &ct, &cr, &cb)
+    WinGetPos(&x, &y, &w, &h, id)
+    fx := (x - cl) / (cr - cl), fy := (y - ct) / (cb - ct)
+    fw := w / (cr - cl),        fh := h / (cb - ct)
+
+    ; apply the same fractions on the next monitor
+    MonitorGetWorkArea(next, &nl, &nt, &nr, &nb)
+    nw := nr - nl, nh := nb - nt
+    WinMove(Round(nl + fx * nw), Round(nt + fy * nh), Round(fw * nw), Round(fh * nh), id)
+    if wasMax
+        WinMaximize(id)
+}
+
+GetWindowMonitor(hwnd) {
+    WinGetPos(&x, &y, &w, &h, "ahk_id " hwnd)
+    cx := x + w / 2, cy := y + h / 2
+    Loop MonitorGetCount() {
+        MonitorGet(A_Index, &l, &t, &r, &b)
+        if (cx >= l && cx < r && cy >= t && cy < b)
+            return A_Index
+    }
+    return MonitorGetPrimary()
 }
 
 ; =========================================================

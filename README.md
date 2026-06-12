@@ -7,16 +7,38 @@ back any time with a hotkey. Loading a slot opens the apps it remembers and
 Apps you've never saved into any slot are never touched — it only ever closes
 apps it knows about.
 
-## Hotkeys (slots 1–9)
+## Scene hotkeys (slots 1–9)
 
 | Do this | Hotkey |
 |---|---|
 | **Save** the apps open right now into slot *n* | `Ctrl` + `Alt` + `Shift` + *n* |
 | **Load** slot *n* (open its apps, close the others) | `Ctrl` + `Alt` + *n* |
+| **Delete** slot *n* (asks to confirm) | `Ctrl` + `Alt` + `Win` + *n* |
 
 Example: open Steam, Discord and Spotify, press `Ctrl+Alt+Shift+2` to save them
 as slot 2. Later, press `Ctrl+Alt+2` and it'll reopen those three and close the
-apps that belong to your other slots.
+apps that belong to your other slots. You can also delete a slot from the tray
+icon → **Delete a slot**.
+
+## Move the active window
+
+Uses the **numpad**, laid out exactly like your screen — `Ctrl + Alt + Numpad`:
+
+```
+ 7  8  9      top-left   |  top half   | top-right
+ 4  5  6      left half  | MAXIMIZE    | right half
+ 1  2  3      bot-left   | bottom half | bot-right
+    0         centered
+```
+
+| Do this | Hotkey |
+|---|---|
+| Snap window to a zone | `Ctrl` + `Alt` + `Numpad 1–9` |
+| Maximize / fullscreen | `Ctrl` + `Alt` + `Numpad 5` |
+| Center the window | `Ctrl` + `Alt` + `Numpad 0` |
+| Send window to the next monitor | `Ctrl` + `Alt` + `Enter` |
+
+(The zone keys work whether NumLock is on or off.)
 
 ## How to run it
 
