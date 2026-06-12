@@ -50,10 +50,10 @@ Zone("l",  0.5,  0,    0.5,  1)     ; right half
 Zone("m",  0,    0.5,  0.5,  0.5)   ; bottom-left quarter
 Zone(",",  0,    0.5,  1,    0.5)   ; bottom half
 Zone(".",  0.5,  0.5,  0.5,  0.5)   ; bottom-right quarter
-Zone("Space", 0.2, 0.15, 0.6, 0.7) ; centered
 
-; ---- maximize / fullscreen (K) and next monitor (Enter) ----
+; ---- maximize (K), center (Space), next monitor (Enter) ----
 Hotkey("CapsLock & k",     (*) => Maximize())
+Hotkey("CapsLock & Space", (*) => CenterWindow())
 Hotkey("CapsLock & Enter", (*) => SendToNextMonitor())
 
 ; ---- reload the script ( ;/: key ) ----
@@ -353,6 +353,55 @@ Maximize(*) {
     hwnd := WinExist("A")
     if hwnd
         WinMaximize("ahk_id " hwnd)
+}
+
+; Center the active window on its monitor. Tries to size it to 60% x 70%, but if
+; the app refuses to shrink that far (e.g. Spotify), it re-centers using the
+; window's ACTUAL size so its true center lands on the monitor's center.
+CenterWindow(*) {
+    hwnd := WinExist("A")
+    if !hwnd
+        return
+    id := "ahk_id " hwnd
+    if WinGetMinMax(id)
+        WinRestore(id)
+    mon := GetWindowMonitor(hwnd)
+    MonitorGetWorkArea(mon, &l, &t, &r, &b)
+    w := r - l, h := b - t
+    tw := Round(w * 0.6), th := Round(h * 0.7)   ; desired size for apps that can resize
+
+    delay := 50
+    Loop 3 {
+        ; resize toward the target (centered), then re-center using the real size
+        g := CenteredPos(l, t, w, h, tw, th)
+        MoveVisible(id, hwnd, g.x, g.y, tw, th)
+        v := GetVisibleRect(hwnd)
+        p := CenteredPos(l, t, w, h, v.w, v.h)
+        MoveVisible(id, hwnd, p.x, p.y, v.w, v.h)
+
+        ; verify it's truly centered (or as centered as an oversized window can be)
+        v2 := GetVisibleRect(hwnd)
+        want := CenteredPos(l, t, w, h, v2.w, v2.h)
+        if (Abs(v2.x - want.x) <= 2 && Abs(v2.y - want.y) <= 2)
+            return
+        if (A_Index < 3) {
+            Sleep delay
+            delay *= 2
+        }
+    }
+}
+
+; Top-left position that centers a (winW x winH) window in the work area. If the
+; window is bigger than the work area in a dimension, it pins to the top/left so
+; its controls stay reachable.
+CenteredPos(wl, wt, ww, wh, winW, winH) {
+    nx := wl + Round((ww - winW) / 2)
+    ny := wt + Round((wh - winH) / 2)
+    if (nx < wl)
+        nx := wl
+    if (ny < wt)
+        ny := wt
+    return { x: nx, y: ny }
 }
 
 SendToNextMonitor(*) {
