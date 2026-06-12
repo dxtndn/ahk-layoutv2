@@ -234,7 +234,33 @@ SnapZone(fx, fy, fw, fh, *) {
     mon := GetWindowMonitor(hwnd)
     MonitorGetWorkArea(mon, &l, &t, &r, &b)
     w := r - l, h := b - t
-    WinMove(Round(l + fx * w), Round(t + fy * h), Round(fw * w), Round(fh * h), id)
+    ; target rectangle for the window's VISIBLE edges
+    MoveVisible(id, hwnd, Round(l + fx * w), Round(t + fy * h), Round(fw * w), Round(fh * h))
+}
+
+; Move a window so its *visible* edges land exactly on (x, y, w, h), cancelling
+; out the invisible DWM border that otherwise leaves gaps between windows and
+; against the screen edges.
+MoveVisible(id, hwnd, x, y, w, h) {
+    bd := GetInvisibleBorder(hwnd)
+    WinMove(x - bd.l, y - bd.t, w + bd.l + bd.r, h + bd.t + bd.b, id)
+}
+
+; Thickness of the invisible drop-shadow border on each side of a window:
+; (full window rect) minus (the visible frame DWM reports). Usually ~7px on
+; left/right/bottom, 0 on top. Returns zeros if DWM can't tell us.
+GetInvisibleBorder(hwnd) {
+    rect := Buffer(16, 0)
+    if !DllCall("GetWindowRect", "ptr", hwnd, "ptr", rect)
+        return { l: 0, t: 0, r: 0, b: 0 }
+    wl := NumGet(rect, 0, "int"), wt := NumGet(rect, 4, "int")
+    wr := NumGet(rect, 8, "int"), wb := NumGet(rect, 12, "int")
+    frame := Buffer(16, 0)
+    if (DllCall("dwmapi\DwmGetWindowAttribute", "ptr", hwnd, "uint", 9, "ptr", frame, "uint", 16) != 0)
+        return { l: 0, t: 0, r: 0, b: 0 }
+    fl := NumGet(frame, 0, "int"), ft := NumGet(frame, 4, "int")
+    fr := NumGet(frame, 8, "int"), fb := NumGet(frame, 12, "int")
+    return { l: fl - wl, t: ft - wt, r: wr - fr, b: wb - fb }
 }
 
 Maximize(*) {
