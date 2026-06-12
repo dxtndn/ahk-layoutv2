@@ -571,10 +571,11 @@ CloseProcs(procs, forceMs) {
     global SpecialApps
     closeSet := Map()
     for proc in procs {
-        if SpecialApps.Has(proc)
+        if SpecialApps.Has(proc) {
             try Run(SpecialApps[proc].quit)        ; e.g. steam://exit
-        else if ProcessExist(proc)
+        } else if ProcessExist(proc) {
             closeSet[proc] := true
+        }
     }
     ; politely close every window of those apps in one sweep
     for hwnd in WinGetList() {
